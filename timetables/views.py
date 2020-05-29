@@ -245,39 +245,53 @@ def timetable(request):
     else:
         url = 'http://rozklady.mpk.krakow.pl/?lang=PL&linia=' + line_number + '__' + variant_number + '__' + stop_number
     #url = 'http://rozklady.mpk.krakow.pl/?lang=PL&linia=' + line_number + '__' + variant_number + '__' + stop_number
-    print(url)
+    #print(url)
     response = requests.get(url,headers=headers)
     soup = BeautifulSoup(response.text, "html.parser")
     hrefs = soup.select('table tbody tr td table tr td table')
     basic_info = hrefs[1].find_all('p')
     available_routes = hrefs[1].find_all('a')
     stops = hrefs[4].find_all('tr')
-    basic_info_parsed = []
+    basic_info_parsed = {}
     available_routes_parsed = []
     stops_parsed = []
     html_ttdata = str(hrefs[5])
     #for x in (range(len(basic_info))):
-    basic_info_parsed.append({"lineNumber":basic_info[0].get_text().strip(), "from":basic_info[1].get_text().strip(), "to":basic_info[2].get_text().strip()})
+    basic_info_parsed.update({"lineNumber":basic_info[0].get_text().strip(), "from":basic_info[1].get_text().strip()[4:len(basic_info[1].get_text().strip())], "to":basic_info[2].get_text().strip()[4:len(basic_info[2].get_text().strip())]})
     for x in (range(len(available_routes))):
         q1 = urllib.parse.parse_qs(urllib.parse.urlparse(available_routes[x].get('href')).query)
         q2 = q1["linia"][0].split("__")
         available_routes_parsed.append({"name":available_routes[x].get_text().strip(), "href":q2})
     for row in stops:
         col = row.find_all('td')
-        print(len(col))
+        #print(len(col))
         if (len(col)) > 1:
             if col[1].get_text().strip() == 'NZ':
                 href = urllib.parse.parse_qs(urllib.parse.urlparse(col[0].find_all('a')[0].get('href')).query)
                 href2 = href["linia"][0].split("__")
                 stop_id = urllib.parse.parse_qs(urllib.parse.urlparse(col[2].find_all('a')[0].get('href')).query)
                 stop_id2 = stop_id["przystanek"]
-                stops_parsed.append({"name":col[0].get_text().strip(), "hrefs":href2, "requestStop":True, "stopID":stop_id2})
+                stops_parsed.append({"name":col[0].get_text().strip(), "hrefs":href2, "requestStop":True, "stopID":stop_id2[0]})
+            elif len(col[0].find_all('a')) > 0:
+                href = urllib.parse.parse_qs(urllib.parse.urlparse(col[0].find_all('a')[0].get('href')).query)
+                href2 = href["linia"][0].split("__")
+                stop_id = urllib.parse.parse_qs(urllib.parse.urlparse(col[2].find_all('a')[0].get('href')).query)
+                stop_id2 = stop_id["przystanek"]
+                stops_parsed.append({"name":col[0].get_text().strip(), "hrefs":href2, "requestStop":False, "stopID":stop_id2[0]})
             else:
-                stops_parsed.append({"name":col[0].get_text().strip(), "requestStop":False})
+                stops_parsed.append({"name":col[0].get_text().strip(), "ends":True, "requestStop":False})
         else:
             stops_parsed.append({"border":True})
 #        for col in row.find_all('td'):
 #            stops_parsed.append(col[1].get_text().strip())
+    def current_stop_filter(stop):
+        print(stop)
+        if stop.get("hrefs") is not None and stop["hrefs"][2] == stop_number:
+            return True
+        else:
+            return False 
+    current_stop = list(filter(current_stop_filter, stops_parsed))[0]
+    basic_info_parsed["currentStop"] = current_stop
     return JsonResponse({"info":basic_info_parsed, "routes":available_routes_parsed, "stops":stops_parsed, "html":html_ttdata}, safe=False)
     
 
@@ -331,13 +345,13 @@ def get_variant_stops(request):
     hrefs = soup.select('table tbody tr td table tr td table')
     basic_info = hrefs[1].find_all('p')
     stops = hrefs[4].find_all('tr')
-    basic_info_parsed = []
+    basic_info_parsed = {}
     stops_parsed = []
     #for x in (range(len(basic_info))):
-    basic_info_parsed.append({"lineNumber":basic_info[0].get_text().strip(), "from":basic_info[1].get_text().strip()[4:len(basic_info[1].get_text().strip())], "to":basic_info[2].get_text().strip()[4:len(basic_info[2].get_text().strip())]})
+    basic_info_parsed.update({"lineNumber":basic_info[0].get_text().strip(), "from":basic_info[1].get_text().strip()[4:len(basic_info[1].get_text().strip())], "to":basic_info[2].get_text().strip()[4:len(basic_info[2].get_text().strip())]})
     for row in stops:
         col = row.find_all('td')
-        print(len(col))
+        #print(len(col))
         if (len(col)) > 1:
             if col[1].get_text().strip() == 'NZ':
                 href = urllib.parse.parse_qs(urllib.parse.urlparse(col[0].find_all('a')[0].get('href')).query)
